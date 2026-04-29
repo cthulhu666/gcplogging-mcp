@@ -1,0 +1,16 @@
+# Copy to ~/.config/gcplogging-mcp/config.toml and set permissions:
+#   chmod 600 ~/.config/gcplogging-mcp/config.toml
+
+[settings]
+# Path to a GCP service account JSON key file with roles/logging.viewer.
+# Optional — falls back to Application Default Credentials (gcloud auth) if omitted.
+# credentials_file = "/path/to/service-account.json"
+
+[projects.my-production]
+project_id = "my-gcp-project-id"
+description = "Production GCP project"
+# credentials_file = "/path/to/prod-service-account.json"  # overrides [settings]
+
+[projects.my-staging]
+project_id = "my-gcp-staging-project-id"
+description = "Staging GCP project"
