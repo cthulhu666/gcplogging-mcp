@@ -14,3 +14,7 @@ description = "Production GCP project"
 [projects.my-staging]
 project_id = "my-gcp-staging-project-id"
 description = "Staging GCP project"
+
+# Page fetches per minute. Cloud Logging's default read quota is 60/min per project;
+# the server paces under it so bulk downloads do not 429. Per-project override allowed.
+# read_requests_per_minute = 50

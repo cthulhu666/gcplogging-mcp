@@ -15,6 +15,9 @@ class ProjectConfig:
     project_id: str
     description: str = ""
     credentials_file: str | None = None
+    # Page fetches per minute. Cloud Logging's default read quota is 60/min per project;
+    # None falls back to logs.DEFAULT_READ_RPM.
+    read_requests_per_minute: int | None = None
 
 
 def config_path() -> str:
@@ -44,17 +47,24 @@ def load_projects() -> dict[str, ProjectConfig]:
 
     settings: dict[str, Any] = data.get("settings", {})
     global_credentials = settings.get("credentials_file")
+    global_rpm = settings.get("read_requests_per_minute")
 
     result: dict[str, ProjectConfig] = {}
     for name, entry in projects.items():
         if "project_id" not in entry:
             raise RuntimeError(f"[projects.{name}] is missing required field 'project_id'")
         credentials_file = entry.get("credentials_file") or global_credentials
+        rpm = entry.get("read_requests_per_minute", global_rpm)
+        if rpm is not None and (not isinstance(rpm, int) or rpm < 1):
+            raise RuntimeError(
+                f"[projects.{name}] read_requests_per_minute must be a positive integer"
+            )
         result[name] = ProjectConfig(
             name=name,
             project_id=entry["project_id"],
             description=entry.get("description", ""),
             credentials_file=os.path.expanduser(credentials_file) if credentials_file else None,
+            read_requests_per_minute=rpm,
         )
 
     return result

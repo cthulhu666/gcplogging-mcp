@@ -13,16 +13,51 @@ MCP server for bulk downloading Google Cloud Logging entries to local files for 
 ### `download_logs` usage
 
 ```
-project:     Config key, e.g. "production"
-filter:      Cloud Logging filter, e.g. 'resource.type="cloud_run_revision" AND severity>=ERROR'
-start_time:  ISO 8601, e.g. "2024-01-20T00:00:00Z"
-end_time:    ISO 8601 (optional, defaults to now)
-output_file: Absolute path (optional, defaults to /tmp/gcplogging-{project}-{timestamp}.jsonl)
+project:          Config key, e.g. "production"
+filter:           Cloud Logging filter, e.g. 'resource.type="cloud_run_revision" AND severity>=ERROR'
+start_time:       ISO 8601, e.g. "2024-01-20T00:00:00Z"
+end_time:         ISO 8601 (optional, defaults to now)
+output_file:      Absolute path (optional, defaults to /tmp/gcplogging-{project}-{timestamp}.jsonl)
+max_entries:      Stop after N entries (optional)
+skip_insert_ids:  resume_skip_insert_ids from a previous partial/truncated result (optional)
 ```
 
-Returns `{ "file": "/tmp/...", "entry_count": 42301, "bytes_written": 15234567, "filter": "..." }`.
+Returns:
+
+```json
+{
+  "file": "/tmp/...", "entry_count": 42301, "bytes_written": 15234567, "filter": "...",
+  "status": "complete", "api_requests": 43, "quota_waits_seconds": 0.0,
+  "quota_retries": 0, "elapsed_seconds": 61.4
+}
+```
 
 Output is JSONL — one JSON object per line with `timestamp`, `severity`, `log_name`, `resource`, `payload`, `labels`.
+
+### Read quota
+
+Cloud Logging allows 60 read requests per minute per project, and one page fetch is one
+read request. Page fetches are paced at 50/min by default, so a download of more than
+~50k entries spends real wall-clock time waiting — narrow the filter or the time range
+rather than widening the quota.
+
+`status` is `complete`, `truncated` (hit `max_entries`), or `partial` (quota still
+exhausted after retrying). The last two also return `resume_from`, `resume_skip_insert_ids`
+and a `note`. Entries already fetched are always kept; to continue, re-run with
+`start_time = resume_from` and `skip_insert_ids = resume_skip_insert_ids`. The resume
+window includes its start timestamp — without the skip list, entries at that exact instant
+are written twice; with an exclusive window they would be dropped instead.
+
+Override the pace per project or globally:
+
+```toml
+[settings]
+read_requests_per_minute = 50
+
+[projects.my-production]
+project_id = "my-gcp-project-id"
+read_requests_per_minute = 30
+```
 
 ## Setup
 

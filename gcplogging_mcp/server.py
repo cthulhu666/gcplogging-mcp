@@ -14,7 +14,7 @@ from gcplogging_mcp import config, logs
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "gcplogging-mcp"
-SERVER_VERSION = "1.0.0"
+SERVER_VERSION = "1.1.0"
 _RESPONSE_MODE = "content-length"
 _CLIENT_NAME: str = ""
 
@@ -49,7 +49,13 @@ def _tool_definitions() -> list[dict[str, Any]]:
             "name": "download_logs",
             "description": (
                 "Download log entries from a GCP project matching a filter and time range, "
-                "saving them to a local JSONL file. Returns the file path and entry count."
+                "saving them to a local JSONL file. Returns the file path and entry count.\n\n"
+                "Page fetches are paced under the project's Cloud Logging read quota "
+                "(60 req/min by default), so a large range takes minutes rather than "
+                "failing with 429 — narrow the filter to keep it short. On quota "
+                "exhaustion or max_entries the call still returns, with status "
+                "'partial'/'truncated' plus resume_from; re-run with start_time set to "
+                "resume_from to continue into a new file."
             ),
             "inputSchema": {
                 "type": "object",
@@ -79,6 +85,24 @@ def _tool_definitions() -> list[dict[str, Any]]:
                         "description": (
                             "Absolute path for the output JSONL file. "
                             "Defaults to /tmp/gcplogging-{project}-{timestamp}.jsonl."
+                        ),
+                    },
+                    "max_entries": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": (
+                            "Stop after this many entries. Returns status 'truncated' and "
+                            "resume_from so nothing is silently dropped. Use it to sample a "
+                            "noisy filter before committing to the full range."
+                        ),
+                    },
+                    "skip_insert_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "resume_skip_insert_ids from the previous partial/truncated "
+                            "result. The resume window includes its start timestamp, so "
+                            "without this the entries at that instant are written twice."
                         ),
                     },
                 },
@@ -127,6 +151,8 @@ def _call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             start_time=arguments["start_time"],
             end_time=arguments.get("end_time"),
             output_file=arguments.get("output_file"),
+            max_entries=arguments.get("max_entries"),
+            skip_insert_ids=arguments.get("skip_insert_ids"),
         )
         return _text_result(result)
 
